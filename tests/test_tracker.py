@@ -84,7 +84,7 @@ def test_broad_entry_level_scope():
 
 
 def test_location_and_cohort():
-    assert classify('Software Engineer','', 'London, UK')['in_scope']==0
+    assert classify('Software Engineer','', 'London, UK')['in_scope']==1
     assert classify('Software Engineer','', 'Remote')['location_status']=='unknown'
     assert classify('Software Engineer','', 'New York or London')['in_scope']==1
     assert classify('New Grad Software Engineer 2026','', 'New York')['in_scope']==0

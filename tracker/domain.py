@@ -124,6 +124,71 @@ def location_status(location, country='', title=''):
     return result
 
 
+MARKETS = {'us':'United States', 'ca':'Canada', 'uk':'United Kingdom'}
+SUPPORTED_LOCATIONS = ('us','ca','uk','us_ca','us_uk','ca_uk','us_ca_uk')
+COUNTRY_CODES = {'US':'us','USA':'us','UNITED STATES':'us','UNITED STATES OF AMERICA':'us',
+                 'CA':'ca','CAN':'ca','CANADA':'ca','GB':'uk','GBR':'uk','UK':'uk','UNITED KINGDOM':'uk'}
+CANADA = re.compile(r'\b(?:canada|toronto|vancouver|montreal|ottawa|calgary|edmonton|waterloo|ontario|british columbia|quebec|alberta|nova scotia|manitoba|saskatchewan|new brunswick|newfoundland|prince edward island)\b|,\s*(?-i:ON|BC|QC|AB|NS|MB|SK|NB|NL|PE)(?=\s*(?:[,;)·|]|$))',re.I)
+UK = re.compile(r'\b(?:united kingdom|u\.k\.?|uk|england|scotland|wales|northern ireland|edinburgh)\b',re.I)
+
+
+def market_location_status(location, country='', title=''):
+    """Positive market evidence, with contradictory or ambiguous metadata held out.
+
+    Multi-location records keep one identity and can belong to several markets.
+    Bare London and Ontario, CA deliberately do not establish a new market.
+    """
+    text=''.join(c for c in unicodedata.normalize('NFKD',location or '') if not unicodedata.combining(c))
+    code=(country or '').strip().upper()
+    structured=COUNTRY_CODES.get(code)
+    if code and not structured:return 'outside_us'
+    parts=re.split(r'\s*[;·|/]\s*|\s+(?:or|and|&)\s+',text,flags=re.I)
+    found=set()
+    for part in parts:
+        # Negated country names cannot supply positive evidence.
+        if re.search(r'\b(?:non[- ]|excluding\s+|except\s+|outside\s+(?:of\s+)?|not\s+(?:(?:available|eligible)\s+)?(?:in\s+|to\s+)?)',part,re.I):
+            continue
+        is_us=_location_signal(part)=='us'
+        if is_us:found.add('us')
+        if re.search(r'\bOntario\s*,\s*CA\b',part,re.I) and structured!='ca':continue
+        if US_STATE_CODE.search(part) and is_us:continue
+        remainder=US_PLACE.sub('',US_TOKEN.sub('',UK.sub('',CANADA.sub('',part))))
+        if UK.search(part) or CANADA.search(part) or structured in {'ca','uk'}:remainder=re.sub(r'\bLondon\b','',remainder,flags=re.I)
+        if not is_us and FOREIGN.search(remainder):continue
+        if CANADA.search(part):found.add('ca')
+        if UK.search(part):found.add('uk')
+        elif re.fullmatch(r'\s*(?:Remote[ ,:-]*)?(?:CA|CAN)\s*',part):found.add('ca')
+        elif re.fullmatch(r'\s*(?:Remote[ ,:-]*)?(?:GB|GBR)\s*',part):found.add('uk')
+    if structured:
+        if len(parts)==1 and found and structured not in found:return 'unknown'
+        if not found and FOREIGN.search(text) and not (structured=='uk' and re.search(r'\bLondon\b',text,re.I)):
+            return 'unknown'
+        found.add(structured)
+    if title and found:
+        suffix=re.search(r'\b(?:remote|based in|located in)\s*[:\-]?\s*(.+)$',title,re.I)
+        scopes=([suffix.group(1)] if suffix else [])+re.findall(r'\(([^)]+)\)',title)
+        for scope in scopes:
+            other=market_location_status(scope)
+            if (other in SUPPORTED_LOCATIONS and not found.intersection(other.split('_'))) or (other=='outside_us'):
+                return 'unknown'
+    if found:return '_'.join(k for k in MARKETS if k in found)
+    return 'outside_us' if FOREIGN.search(text) else 'unknown'
+
+
+def market_countries(status):
+    return status.split('_') if status in SUPPORTED_LOCATIONS else []
+
+
+def market_location_label(location, country='', work_model='unknown', status=None):
+    status=status or market_location_status(location,country)
+    if status=='us':return us_location_label(location,country,work_model)
+    # Retain raw multi-location evidence in details, but keep unrelated markets off the row.
+    parts=re.split(r'\s*[;·|/]\s*',location or '')
+    selected=[p for p in parts if market_location_status(p) in SUPPORTED_LOCATIONS]
+    if selected:return ' · '.join(selected[:2])+(f' +{len(selected)-2} locations' if len(selected)>2 else '')
+    return ' / '.join(MARKETS[k] for k in market_countries(status)) or location
+
+
 ROLE_FAMILIES={
     'data':r'\b(?:data engineer|analytics engineer|data platform)\b',
     'ai':r'\b(?:machine learning|ml engineer|ai engineer|research engineer|artificial intelligence)\b',
@@ -157,9 +222,22 @@ def us_location_label(location, country='', work_model='unknown'):
 
 def classify(title, description, location='', country='', start_date='2027-06-01'):
     text = plain(description)
+    loc = market_location_status(location, country, title)
+    international = any(k in market_countries(loc) for k in ('ca','uk'))
     evidence = []
     for sentence in re.split(r'(?<=[!?;])\s+|\n+|(?<=[a-z0-9])\.\s+(?=[A-Z])', text):
         negative = any(re.search(p, sentence, re.I) for p in NEGATIVE)
+        if international:
+            negative = negative or any(re.search(p,sentence,re.I) for p in [
+                r'\b(?:must|need to)\s+be\s+(?:a\s+)?(?:canadian|british|uk)\s+citizen\b',
+                r'\b(?:canadian|british|uk)\s+(?:citizens?\s+only|citizenship\s+(?:is\s+)?required)\b',
+                r'\b(?:must|need to|required to)\b[^.!?]{0,60}\b(?:already|currently)\b[^.!?]{0,50}\b(?:authori[sz]ed|right to work|work (?:permit|authori[sz]ation))\b',
+                r'\b(?:must|need to|required to)\b[^.!?]{0,60}\b(?:unrestricted|permanent|existing)\s+(?:right to work|work authori[sz]ation)\b',
+                r'\b(?:must|need to|required to)\b[^.!?]{0,60}\b(?:right to work|authori[sz]ed to work|eligible to work)\b[^.!?]{0,50}\b(?:uk|united kingdom|canada)\b(?![^.!?]{0,60}\bsponsor)',
+                r'\b(?:cannot|unable to|do not|does not|will not)\s+(?:offer|provide|support)\s+(?:a\s+)?(?:skilled worker|work (?:visa|permit)|visa)\b',
+                r'\bno\s+(?:skilled worker|work permit)\s+sponsorship\b',
+                r'\b(?:canadian|british|uk)\s+(?:citizens?|permanent residents?)\s+(?:or\s+(?:permanent residents?|citizens?)\s+)?only\b',
+            ])
         positive = not negative and any(re.search(p, sentence, re.I) for p in POSITIVE)
         if negative or positive:
             evidence.append({'kind': 'restriction' if negative else 'support', 'quote': sentence[:1200], 'origin': 'posting'})
@@ -195,10 +273,9 @@ def classify(title, description, location='', country='', start_date='2027-06-01
         reasons.append(f'Requires at least {min_years} years of experience')
     if min_years is None and not EARLY.search(title):
         reasons.append('Experience requirement needs verification')
-    loc = location_status(location, country, title)
-    if loc != 'us':
+    if loc not in SUPPORTED_LOCATIONS:
         scope = False
-        reasons.append('Location is outside the US' if loc=='outside_us' else 'US work location is unconfirmed')
+        reasons.append('Location is outside US, Canada and UK' if loc=='outside_us' else 'Work location in US, Canada or UK is unconfirmed')
     if re.search(r'\b202[0-6]\b', title) and not re.search(r'\b202[7-9]\b', title) and EARLY.search(title):
         scope = False
         reasons.append('Explicit graduate cohort predates 2027')

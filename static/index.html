@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="A simple daily job finder for US new-grad and entry-level engineering roles.">
+  <meta name="description" content="A simple daily job finder for US, Canada and UK new-grad and entry-level engineering roles.">
   <title>Open Job Tracker</title>
   <link rel="icon" href="data:,"><link rel="stylesheet" href="/static/style.css">
   <script src="/static/app.js" defer></script>
@@ -15,7 +15,7 @@
   </form>
 </div>
 <main id="app" hidden>
-  <header><div><h1>Your daily jobs</h1><p class="subtitle">US · New grad &amp; entry level · June 2027 onward</p></div>
+  <header><div><h1>Your daily jobs</h1><p class="subtitle">US, Canada &amp; UK · New grad &amp; entry level · June 2027 onward</p></div>
     <div class="header-actions"><button id="settings-button" aria-expanded="false" aria-controls="settings">Settings</button></div>
   </header>
   <div class="refresh-line" id="refresh-line" role="status">Checking last refresh…</div>
@@ -58,8 +58,9 @@
     <div class="settings-footer"><a href="/api/export" download>Export jobs &amp; status</a><button id="add-job-button" aria-expanded="false" aria-controls="add-job">Add a job</button><button id="sign-out">Sign out</button></div>
   </section>
   <nav class="views" aria-label="Job views"><button data-view="edition" aria-pressed="true">Daily edition</button><button data-view="saved" aria-pressed="false">Saved</button><button data-view="tracked" aria-pressed="false">Applications</button></nav>
-  <section id="edition-panel" aria-label="Daily publication"><div class="edition-heading"><div><p class="eyebrow">DAILY EDITION · UP TO 50 JOBS</p><h2 id="edition-title">Preparing your edition</h2></div><label>Edition<select id="edition-select" aria-label="Choose daily edition"><option value="">Latest edition</option></select></label></div><p id="edition-window" class="muted"></p><p id="edition-progress" role="status"></p><p id="edition-coverage" class="muted"></p></section>
-  <div class="filters main-filters"><label class="search-label"><span class="sr-only">Search roles, companies, or locations</span><input id="search" type="search" placeholder="Search role, company, or US city" autocomplete="off"></label>
+  <section id="edition-panel" aria-label="Daily publication"><div class="edition-heading"><div><p class="eyebrow" id="edition-limit">DAILY EDITION · UP TO 100 JOBS</p><h2 id="edition-title">Preparing your edition</h2></div><label>Edition<select id="edition-select" aria-label="Choose daily edition"><option value="">Latest edition</option></select></label></div><p id="edition-window" class="muted"></p><p id="edition-progress" role="status"></p><p id="edition-coverage" class="muted"></p></section>
+  <div class="filters main-filters"><label class="search-label"><span class="sr-only">Search roles, companies, or locations</span><input id="search" type="search" placeholder="Search role, company, or city" autocomplete="off"></label>
+    <label><span class="sr-only">Country</span><select id="country-filter"><option value="">All countries</option><option value="us">United States</option><option value="ca">Canada</option><option value="uk">United Kingdom</option></select></label>
     <label><span class="sr-only">Role type</span><select id="role-filter"><option value="">All roles</option><option value="software">Software development</option><option value="data">Data engineering</option><option value="ai">AI / machine learning</option><option value="infrastructure">Cloud / DevOps / SRE</option><option value="quality">QA / test automation</option><option value="security">Security</option><option value="embedded">Embedded / firmware</option></select></label>
     <label><span class="sr-only">Sponsorship filter</span><select id="sponsorship"><option value="">All sponsorship evidence</option><option value="supported">Sponsorship mentioned</option><option value="unknown">Sponsorship unconfirmed</option><option value="conflict">Conflicting evidence</option></select></label>
     <label><span class="sr-only">Found within</span><select id="found-filter"><option value="0">Any time found</option><option value="1">Found in 24 hours</option><option value="3">Found in 3 days</option><option value="7">Found in 7 days</option><option value="30">Found in 30 days</option></select></label>
@@ -74,9 +75,9 @@
     <p class="filter-hint">Not stated means the source did not provide it. “Found” is when this tracker discovered a job.</p>
   </div></details>
   <form id="add-job" class="inline-form" hidden><h3>Add a job</h3><label>Role<input name="title" required maxlength="250"></label><label>Company<input name="company" required maxlength="150"></label><label>Location<input name="location" maxlength="500"></label><label>Application link<input name="apply_url" type="url" required></label><button type="submit" class="primary">Add job</button></form>
-  <div class="list-heading"><div><p id="result-count" aria-live="polite">Loading jobs…</p><p id="view-note">Only roles with a US location signal.</p></div><div class="list-tools"><button id="clear-filters" hidden>Clear filters</button><label><span class="sr-only">Sort jobs</span><select id="sort-filter"><option value="recommended">Graduate roles first</option><option value="newest">Recently found</option><option value="posted">Recently posted</option><option value="company">Company A–Z</option></select></label></div></div>
-  <div class="table-scroll"><table id="jobs-table"><caption class="sr-only">Job openings and application status</caption><thead><tr><th>Role / company</th><th>US location</th><th>Sponsorship</th><th>Decision</th><th><span class="sr-only">Application</span></th></tr></thead><tbody id="jobs-body"></tbody></table></div>
-  <div id="empty" hidden><h2>No jobs match these filters</h2><p>Clear filters to see more US roles. Non-US and unconfirmed locations stay out of this feed.</p><button id="empty-clear">Clear filters</button></div>
+  <div class="list-heading"><div><p id="result-count" aria-live="polite">Loading jobs…</p><p id="view-note">US, Canada and UK roles.</p></div><div class="list-tools"><button id="clear-filters" hidden>Clear filters</button><label><span class="sr-only">Sort jobs</span><select id="sort-filter"><option value="recommended">Graduate roles first</option><option value="newest">Recently found</option><option value="posted">Recently posted</option><option value="company">Company A–Z</option></select></label></div></div>
+  <div class="table-scroll"><table id="jobs-table"><caption class="sr-only">Job openings and application status</caption><thead><tr><th>Role / company</th><th>Location</th><th>Sponsorship</th><th>Decision</th><th><span class="sr-only">Application</span></th></tr></thead><tbody id="jobs-body"></tbody></table></div>
+  <div id="empty" hidden><h2>No jobs match these filters</h2><p>Clear filters to see more US, Canada and UK roles. Other countries and unconfirmed locations stay out of this feed.</p><button id="empty-clear">Clear filters</button></div>
   <footer class="list-footer"><span id="page-info"></span><div><button id="previous" disabled>Previous</button><button id="next" disabled>Next</button></div></footer>
   <p class="footnote">Sponsorship evidence reflects the posting, not an employment or visa guarantee. Editions use employer publication times, not discovery dates. Known repeats are held out. Unstated start dates and sponsorship remain unconfirmed.</p>
 </main>

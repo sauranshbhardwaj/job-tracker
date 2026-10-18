@@ -29,7 +29,7 @@ from tracker.sources import ashby,lever,recruitee
 ])
 def test_strict_location_signals(location,country,expected):
     assert location_status(location,country)==expected
-    assert bool(classify('Software Engineer','',location,country)['in_scope'])==(expected=='us')
+    assert bool(classify('Software Engineer','',location,country)['in_scope'])==(expected=='us' or location in {'London, UK','Canada','Boston, United Kingdom'})
 
 
 def test_title_contradiction_is_not_treated_as_a_us_job():

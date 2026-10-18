@@ -9,7 +9,7 @@ from urllib.parse import unquote, urlsplit, urlencode
 import httpx
 from bs4 import BeautifulSoup
 
-from .domain import canonical_url, plain, ROLE, SENIOR
+from .domain import canonical_url, plain, ROLE, SENIOR, COUNTRY_CODES, MARKETS
 from .catalog import DIRECTORIES, parse_directory
 
 ATS = {'greenhouse', 'ashby', 'lever', 'recruitee', 'smartrecruiters'}
@@ -110,15 +110,21 @@ class Fetcher:
         if provider in AGGREGATORS:
             return await self.aggregate(provider), []
         if provider == 'smartrecruiters':
-            rows=[]
-            for page in range(100):
-                data=(await self.get(f'https://api.smartrecruiters.com/v1/companies/{slug}/postings?limit=100&offset={page*100}&country=us')).json()
-                if not isinstance(data,dict) or not isinstance(data.get('content'),list) or not isinstance(data.get('totalFound'),int):
-                    raise ValueError('SmartRecruiters schema changed; snapshot rejected')
-                batch=data['content'];rows.extend(batch)
-                if len(rows)>=data['totalFound']:break
-                if not batch:raise ValueError('Incomplete SmartRecruiters snapshot')
-            else:raise ValueError('SmartRecruiters pagination limit reached')
+            rows=[];seen=set()
+            # A single complete snapshot covers all three requested countries.
+            # Any failed country rejects the snapshot, preserving prior availability.
+            for country in ('us','ca','gb'):
+                count=0
+                for page in range(100):
+                    data=(await self.get(f'https://api.smartrecruiters.com/v1/companies/{slug}/postings?limit=100&offset={page*100}&country={country}')).json()
+                    if not isinstance(data,dict) or not isinstance(data.get('content'),list) or not isinstance(data.get('totalFound'),int):
+                        raise ValueError('SmartRecruiters schema changed; snapshot rejected')
+                    batch=data['content'];count+=len(batch)
+                    for row in batch:
+                        if row['id'] not in seen:seen.add(row['id']);rows.append(row)
+                    if count>=data['totalFound']:break
+                    if not batch:raise ValueError('Incomplete SmartRecruiters snapshot')
+                else:raise ValueError('SmartRecruiters pagination limit reached')
             jobs=[]
             for row in rows:
                 if ROLE.search(row['name']) and not SENIOR.search(row['name']):
@@ -158,7 +164,12 @@ class Fetcher:
                 return await asyncio.to_thread(lambda:[lever(j,source) for j in rows]), []
         raise ValueError('Lever pagination limit reached; partial snapshot rejected')
 
-    async def aggregate(self, provider):
+    async def aggregate(self, provider, country=None):
+        if provider=='himalayas' and country is None:
+            jobs={}
+            for market in ('US','CA','GB'):
+                for job in await self.aggregate(provider,market):jobs[job['external_id']]=job
+            return list(jobs.values())
         jobs, seen, cursors = [], set(), set()
         cursor = None
         for page in range(1,10001):
@@ -170,7 +181,7 @@ class Fetcher:
                 url = 'https://jobicy.com/api/v2/remote-jobs?' + urlencode(params)
             else:
                 url = 'https://himalayas.app/jobs/api/search?' + urlencode({
-                    'country':'US','seniority':'Entry-level,Mid-level','sort':'recent','page':page})
+                    'country':country,'seniority':'Entry-level,Mid-level','sort':'recent','page':page})
             data = (await self.get(url)).json()
             rows = data.get('jobs')
             if not isinstance(rows,list) or data.get('success') is False:
@@ -206,9 +217,9 @@ def ashby(j,source):
     locations = [j.get('location','')]+[s.get('location','') for s in secondary]
     countries = [((j.get('address') or {}).get('postalAddress') or {}).get('addressCountry','')]
     countries += [((s.get('address') or {}).get('postalAddress') or s.get('address') or {}).get('addressCountry','') for s in secondary]
-    country = 'US' if any(c in ('US','USA','United States') for c in countries) else next((c for c in countries if c),'')
+    country = next((c for market in ('us','ca','uk') for c in countries if COUNTRY_CODES.get(c.upper())==market),next((c for c in countries if c),''))
     return dict(external_id=j.get('id') or j['jobUrl'], title=j['title'], company=source['name'],
-                location=' · '.join(x for x in locations if x),country=country,
+                location=' · '.join(f"{loc}, {MARKETS.get(COUNTRY_CODES.get(code.upper()),'[country='+code+']')}" if code else loc for loc,code in zip(locations,countries) if loc or code),country=country,
                 description=j.get('descriptionPlain') or plain(j.get('descriptionHtml','')),
                 apply_url=j.get('applyUrl') or j['jobUrl'], posted_at=j.get('publishedAt'),posted_kind='employer_publication',
                 work_model=j.get('workplaceType',''),employment_type=j.get('employmentType',''))
@@ -227,8 +238,12 @@ def lever(j,source):
 def recruitee(j,source):
     locations = j.get('locations') or []
     countries = [x.get('country_code') or x.get('country','') for x in locations]
-    country = 'US' if any(c in {'US','USA','United States'} for c in countries) else j.get('country_code') or j.get('country','')
-    location = ' · '.join(', '.join(str(x[k]) for k in ('city','state','country') if x.get(k)) for x in locations) or j.get('location','')
+    country = next((c for market in ('us','ca','uk') for c in countries if COUNTRY_CODES.get(c.upper())==market),j.get('country_code') or j.get('country',''))
+    def location_label(item):
+        code=item.get('country_code','')
+        country=item.get('country') or MARKETS.get(COUNTRY_CODES.get(code.upper()),'[country='+code+']' if code else '')
+        return ', '.join(str(x) for x in (item.get('city'),item.get('state'),country) if x)
+    location = ' · '.join(location_label(x) for x in locations) or j.get('location','')
     return dict(external_id=str(j['id']),title=j['title'],company=j.get('company_name') or source['name'],
                 location=location,country=country,description=plain(j.get('description',''))+'\n'+plain(j.get('requirements','')),
                 apply_url=j.get('careers_apply_url') or j['careers_url'],posted_at=j.get('published_at'),posted_kind='employer_publication',
@@ -265,7 +280,7 @@ def aggregate_job(j,provider):
     posted=j.get('pubDate')
     if isinstance(posted,(int,float)): posted=datetime.fromtimestamp(posted,timezone.utc).isoformat()
     return dict(external_id=j['guid'],title=j['title'],company=j['companyName'],
-                location=', '.join(countries) or 'Worldwide remote',country=country,description=plain(j.get('description','')),
+                location=' · '.join(MARKETS.get(COUNTRY_CODES.get(c.upper()),c) for c in countries) or 'Worldwide remote',country=country,description=plain(j.get('description','')),
                 # Keep the provider's canonical page for attribution and application access.
                 apply_url=j['guid'],posted_at=posted,work_model='remote')
 

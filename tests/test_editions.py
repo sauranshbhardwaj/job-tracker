@@ -92,13 +92,13 @@ def test_unknown_timestamps_never_become_24h_evidence(value):
     assert timestamp(value) is None
 
 
-def test_fixed_50_cap_without_topups(setup):
-    db,s=setup;ingest(db,s,[job(i) for i in range(70)])
+def test_fixed_100_cap_without_topups(setup):
+    db,s=setup;ingest(db,s,[job(i) for i in range(120)])
     edition_id=db.publish_edition(END,'2027-06-01',False)
-    result=db.edition();assert result['edition']['total']==50 and len(result['jobs'])==50
+    result=db.edition();assert result['edition']['total']==100 and len(result['jobs'])==100
     ids=[j['id'] for j in result['jobs']]
     db.decide(ids[0],{'status':'applied'});db.decide(ids[1],{'status':'dismissed'})
-    result=db.edition();assert result['total']==48 and result['handled']==2 and result['edition']['total']==50
+    result=db.edition();assert result['total']==98 and result['handled']==2 and result['edition']['total']==100
     assert db.publish_edition(END,'2027-06-01',True)==edition_id
     assert {j['id'] for j in result['jobs']}==set(ids[2:])
     with db.connect() as c:c.execute("UPDATE jobs SET description='Updated after cutoff' WHERE id=?",(ids[2],))
@@ -213,16 +213,16 @@ def test_smartrecruiters_public_feed_has_employer_details_and_dates():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
             return await Fetcher(client).collect({'provider':'smartrecruiters','slug':'Acme','name':'Acme'})
     jobs,_=asyncio.run(run())
-    assert len(requests)==2 and jobs[0]['description']=='0-2 years of experience.'
+    assert len(requests)==4 and jobs[0]['description']=='0-2 years of experience.'
     assert jobs[0]['posted_kind']=='employer_publication' and jobs[0]['country']=='US'
     assert board_from_url(jobs[0]['apply_url'])==('smartrecruiters','Acme')
 
 
 def test_one_edition_per_local_day_even_if_cutoff_setting_changes(setup):
-    db,s=setup;ingest(db,s,[job(i) for i in range(70)])
+    db,s=setup;ingest(db,s,[job(i) for i in range(120)])
     first=db.publish_edition(END,'2027-06-01',False)
     assert db.publish_edition(END+timedelta(minutes=30),'2027-06-01',False)==first
-    assert db.edition()['edition']['total']==50
+    assert db.edition()['edition']['total']==100
 
 
 def test_employer_metadata_and_contracts_override_weak_title():

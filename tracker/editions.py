@@ -5,8 +5,8 @@ from zoneinfo import ZoneInfo
 
 from .domain import classify, EARLY, SENIOR, fingerprint, plain
 
-POLICY_VERSION = 1
-CAP = 50
+POLICY_VERSION = 2
+CAP = 100
 
 
 def timestamp(value):

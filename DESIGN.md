@@ -14,7 +14,7 @@ Native system sans serif. Body and rows 14px, secondary metadata 11–12px, head
 
 ## Layout
 
-One main column with a compact header, Daily edition / Saved / Applications tabs, a publication date and 6:30 PM Eastern window, and remaining / handled counts. The homepage contains at most 50 frozen postings. Search, role, and sponsorship are the only visible edition filters. Older editions are selectable. Additional filters and the uncertain discovery queue live outside the daily edition. Source health, collection controls, Plus settings, and cutoff preferences live in Settings. On small screens semantic job rows become stacked entries with Apply and decision controls visible without horizontal scrolling.
+One main column with a compact header, Daily edition / Saved / Applications tabs, a publication date and 6:30 PM Eastern window, and remaining / handled counts. The homepage contains at most 100 frozen postings. Search, country, role, and sponsorship are the only visible edition filters. Older editions are selectable. Additional filters and the uncertain discovery queue live outside the daily edition. Source health, collection controls, Plus settings, and cutoff preferences live in Settings. On small screens semantic job rows become stacked entries with Apply and decision controls visible without horizontal scrolling.
 
 ## Interaction
 
