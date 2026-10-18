@@ -275,7 +275,8 @@ def aggregate_job(j,provider):
                     apply_url=j['url'],posted_at=j.get('pubDate'),work_model='remote')
     countries=j.get('locationRestrictions') or []
     # Preserve the actual country restrictions. Empty means worldwide, not a US-only role.
-    country='US' if any(c in {'US','USA','United States'} for c in countries) else countries[0] if countries else ''
+    country=next((c for market in ('us','ca','uk') for c in countries if COUNTRY_CODES.get(c.upper())==market),countries[0] if countries else '')
+    country={'us':'US','ca':'CA','uk':'GB'}.get(COUNTRY_CODES.get(country.upper()),country)
     from datetime import datetime,timezone
     posted=j.get('pubDate')
     if isinstance(posted,(int,float)): posted=datetime.fromtimestamp(posted,timezone.utc).isoformat()

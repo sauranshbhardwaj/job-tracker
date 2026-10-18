@@ -98,6 +98,8 @@ def test_provider_multicountry_metadata():
     assert market_location_status(job['location'],job['country'])=='ca_uk'
     job=aggregate_job(dict(guid='https://example.com/job',title='Graduate Software Engineer',companyName='Acme',locationRestrictions=['US','CA','GB']),'himalayas')
     assert market_location_status(job['location'],job['country'])=='us_ca_uk'
+    job=aggregate_job(dict(guid='https://example.com/job',title='Graduate Software Engineer',companyName='Acme',locationRestrictions=['Germany','Canada']),'himalayas')
+    assert market_location_status(job['location'],job['country'])=='ca'
 
 
 @pytest.mark.parametrize('provider',['smartrecruiters','himalayas'])
